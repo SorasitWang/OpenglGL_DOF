@@ -30,6 +30,7 @@ const unsigned int SCR_WIDTH = 200;
 const unsigned int SCR_HEIGHT = 200;
 const glm::vec2 SCR_CENTER(SCR_WIDTH/2, SCR_HEIGHT/2);
 const float zNear = 0.1f, zFar = 100.0f;
+const float zMul = zNear * 1, zDiff = 1 - zNear;
 bool bloom = true;
 bool bloomKeyPressed = false;
 float exposure = 1.0f;
@@ -44,10 +45,10 @@ bool firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-const float aperture = 0.2f;
-const float focusLength = 0.93f;
+const float aperture = 0.01f;
+const float focusLength = 0.976f;
 const float invFocusLength = 1 / focusLength;
-const float screenPos = 0.8f;
+const float screenPos = 500.0f;
 int main()
 {
     // glfw: initialize and configure
@@ -239,7 +240,7 @@ int main()
     //float dofDepth[SCR_HEIGHT * SCR_WIDTH];
     // render loop
     // -----------
-    const float zMul = zNear * zFar, zDiff = zFar - zNear;
+   
     while (!glfwWindowShouldClose(window))
     {
         dofFBO1 = vector<float>(SCR_WIDTH * SCR_HEIGHT * 3, 0);
@@ -306,12 +307,7 @@ int main()
         shader.setMat4("model", model);
         renderCube();
 
-        model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, 2.7f, 4.0));
-        model = glm::rotate(model, glm::radians(23.0f), glm::normalize(glm::vec3(1.0, 0.0, 1.0)));
-        model = glm::scale(model, glm::vec3(1.25));
-        shader.setMat4("model", model);
-        renderCube();
+      
 
         model = glm::mat4(1.0f);
         model = glm::translate(model, glm::vec3(-2.0f, 1.0f, -3.0));
@@ -345,25 +341,29 @@ int main()
         ////cout << dofFBO[0] << endl;
         ////#pragma omp parallel for
         float st = static_cast<float>(glfwGetTime());
-       
+        float _min = 10.0f;
         for (unsigned int i = 0; i < dofDepth.size(); i++) {
-            // 1 / dofDepth
-            //dofDepth[i] = (zFar - dofDepth[i] * zDiff) / (zNear+zDiff);
-            //cout << dofDepth[i] << endl;
-           //dofDepth[i] = zDiff / (dofDepth[i] - zNear);
+           /* if (dofDepth[i] < _min)
+                _min = dofDepth[i];*/
+           /*  1 / dofDepth
+            dofDepth[i] = (zFar - dofDepth[i] * zDiff) / (zNear+zDiff);*/
+            //if (dofDepth[i] < 1)
+               // cout << dofDepth[i] << endl;
+            dofDepth[i] = zDiff / (dofDepth[i] - zNear);
+           
         }
+        //cout << _min << endl;
         //uniformDist(0, vector<GLubyte>(), dofFBO2);
         for (unsigned int j = 0; j < SCR_HEIGHT; j++) {
             const unsigned int jMulWidth = j * SCR_WIDTH;
             for (unsigned int i = 0; i < SCR_WIDTH; i++) {
-                const float invPixelDepth = 1/dofDepth[i + jMulWidth];
+                const float invPixelDepth = dofDepth[i + jMulWidth];
                 const float idx = (i + jMulWidth) * 3;
                 float c = abs(aperture * (screenPos * (invFocusLength - invPixelDepth) - 1));
+                /*if (abs(dofDepth[i + jMulWidth] - 1) > 0.001f)
+                    cout << 1/dofDepth[i + jMulWidth] << " " << c/2*SCR_HEIGHT << endl;*/
                 //c = 0.01f;
                 //cout << 1/ invPixelDepth << endl;
-              /*  vector<GLubyte>x = vector<GLubyte>{ dofFBO1[(i + jMulWidth) * 3]
-                    , dofFBO1[(i + jMulWidth) * 3 + 1]
-                    , dofFBO1[(i + jMulWidth) * 3 + 2] };*/
                      uniformDist(c/2, i,j,vector<float>{dofFBO1[idx]
                          , dofFBO1[idx + 1]
                          , dofFBO1[idx + 2]}
@@ -699,6 +699,7 @@ std::vector<float> filterCreation(const int size,const float sigma)
 void uniformDist(float r,int x,int y,vector<float> prevValue, vector<float>& fb2) {
 
     r =r * SCR_WIDTH;
+    r = max(2.0f,floor(r));
     //r = max(8.0f,r);
     //cout << r << endl;
     const float r2 = r * r;
