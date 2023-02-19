@@ -4,8 +4,12 @@ layout (location = 0) in vec3 aPos; // the position variable has attribute posit
 layout (location = 1) in vec3 aNormal;
 layout (location = 2) in vec2 aTexCoord;
 uniform mat4 model;
-uniform mat4 projection;
-uniform mat4 view;
+layout (std140) uniform Matrices
+{
+    mat4 vp;
+    //mat4 projection;
+   //mat4 view;
+};
 uniform bool inverse_normals;
 
 out vec2 TexCoords;
@@ -23,5 +27,6 @@ void main()
     mat3 normalMatrix = transpose(inverse(mat3(model)));
     Normal = normalize(normalMatrix * n);
     
-    gl_Position = projection * view * model * vec4(aPos, 1.0);
+    //gl_Position = projection * view * model * vec4(aPos, 1.0);
+    gl_Position = vp * model * vec4(aPos, 1.0);
 }

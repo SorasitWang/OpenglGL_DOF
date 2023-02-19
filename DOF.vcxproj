@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="glad.c" />
+    <ClCompile Include="header\helper\helper.cpp" />
     <ClCompile Include="header\light\light.cpp" />
     <ClCompile Include="src\Source.cpp" />
     <ClCompile Include="src\tmp.cpp" />
@@ -27,6 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\camera.h" />
+    <ClInclude Include="header\helper\helper.h" />
     <ClInclude Include="header\light\light.h" />
     <ClInclude Include="header\mesh.h" />
     <ClInclude Include="header\model.h" />
@@ -34,6 +36,10 @@
     <ClInclude Include="header\stb_image.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="header\helper\depthShader.fs" />
+    <None Include="header\helper\depthShader.vs" />
+    <None Include="header\helper\screenShader.fs" />
+    <None Include="header\helper\screenShader.vs" />
     <None Include="src\7.bloom.fs" />
     <None Include="src\7.bloom.vs" />
     <None Include="src\7.bloom_final.fs" />
@@ -41,6 +47,8 @@
     <None Include="src\7.blur.fs" />
     <None Include="src\7.blur.vs" />
     <None Include="src\7.light_box.fs" />
+    <None Include="src\accu.fs" />
+    <None Include="src\accu.vs" />
     <None Include="src\bloom.fs" />
     <None Include="src\bloom.vs" />
     <None Include="src\blur.fs" />

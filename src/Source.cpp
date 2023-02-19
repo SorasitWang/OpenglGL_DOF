@@ -12,6 +12,7 @@
 #include "../header/shader_m.h"
 #include "../header/camera.h"
 #include "../header/model.h"
+#include "../header/helper/helper.h"
 #include <cmath>
 #include <iostream>
 
@@ -19,24 +20,28 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 unsigned int loadTexture(const char* path, bool gammaCorrection);
 void renderQuad();
 void renderCube();
-void uniformDist(const float r, int x,int y,vector<float> prevValue, vector<float>& fb2);
+void uniformDist(const float r, int x,int y,vector<float> prevValue, vector<float>& fb2,vector<float>& fb3);
+void draw(Shader shader, Shader shaderLight, unsigned int woodTexture, unsigned int containerTexture
+    , vector<glm::vec3> lightPositions, vector<glm::vec3> lightColors);
+float normalizeDepth(float depth);
 std::vector<float> filterCreation(const int size,const float sigma);
-
+# define M_PI           3.14159265358979323846  
 // settings
-const unsigned int SCR_WIDTH = 200;
-const unsigned int SCR_HEIGHT = 200;
+const unsigned int SCR_WIDTH = 300;
+const unsigned int SCR_HEIGHT = 300;
 const glm::vec2 SCR_CENTER(SCR_WIDTH/2, SCR_HEIGHT/2);
-const float zNear = 0.1f, zFar = 100.0f;
+const float zNear = 0.1f, zFar = 15.0f;
 const float zMul = zNear * 1, zDiff = 1 - zNear;
 bool bloom = true;
 bool bloomKeyPressed = false;
 float exposure = 1.0f;
 
 // camera
-Camera camera(glm::vec3(0.0f, 0.0f, 5.0f));
+Camera camera(glm::vec3(.0f, 1.5f, 4.5f));
 float lastX = (float)SCR_WIDTH / 2.0;
 float lastY = (float)SCR_HEIGHT / 2.0;
 bool firstMouse = true;
@@ -45,12 +50,17 @@ bool firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-const float aperture = 0.01f;
-const float focusLength = 0.976f;
-const float invFocusLength = 1 / focusLength;
-const float screenPos = 500.0f;
+const float aperture = 4.0f;
+float focusLength = 6.0;
+float focus = 1.0f;
+float invFocusLength = 1 / focusLength;
+float screenPos = 4.0f;
+vector<float> allR;
+Helper helper;
+using namespace std;
 int main()
 {
+    camera.ProcessMouseMovement(10.0f,1.0f);
     // glfw: initialize and configure
     // ------------------------------
     glfwInit();
@@ -75,9 +85,10 @@ int main()
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
 
     // tell GLFW to capture our mouse
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    //glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     // glad: load all OpenGL function pointers
     // ---------------------------------------
@@ -97,7 +108,24 @@ int main()
     Shader shaderLight("./src/7.bloom.vs", "./src/7.light_box.fs");
     Shader shaderBlur("./src/7.blur.vs", "./src/7.blur.fs");
     Shader shaderBloomFinal("./src/7.bloom_final.vs", "./src/7.bloom_final.fs");
+    helper = Helper(SCR_WIDTH, SCR_HEIGHT);
 
+    unsigned int uniformBlockIndexDepth = glGetUniformBlockIndex(helper.depthShader.ID, "Matrices");
+    glUniformBlockBinding(helper.geoShader.ID, uniformBlockIndexDepth, 0);
+    unsigned int uniformBlockIndexShader = glGetUniformBlockIndex(shader.ID, "Matrices");
+    glUniformBlockBinding(shader.ID, uniformBlockIndexShader, 0);
+    unsigned int uniformBlockIndexLight = glGetUniformBlockIndex(shaderLight.ID, "Matrices");
+    glUniformBlockBinding(shaderLight.ID, uniformBlockIndexLight, 0);
+
+    unsigned int uboMatrices;
+    glGenBuffers(1, &uboMatrices);
+
+    glBindBuffer(GL_UNIFORM_BUFFER, uboMatrices);
+    // Mat4
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), NULL, GL_STATIC_DRAW);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+    glBindBufferRange(GL_UNIFORM_BUFFER, 0, uboMatrices, 0, sizeof(glm::mat4));
     // load textures
     // -------------
     unsigned int woodTexture = loadTexture("./res/texture/wood.png", true); // note that we're loading the texture as an SRGB texture
@@ -224,27 +252,24 @@ int main()
     unsigned int testText;
     glGenTextures(1, &testText);
     glBindTexture(GL_TEXTURE_2D, testText);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, dofFBO3.data());
-    glGenerateMipmap(GL_TEXTURE_2D);
+    //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, dofFBO3.data());
+    //glGenerateMipmap(GL_TEXTURE_2D);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    /*float dofFBOR[600][600];
-    float dofFBOG[600][600];
-    float dofFBOB[600][600];
-    float dofFBOD[600][600];*/
     
     //float dofDepth[SCR_HEIGHT * SCR_WIDTH];
     // render loop
     // -----------
-   
+    int pingpong = 0;
     while (!glfwWindowShouldClose(window))
     {
         dofFBO1 = vector<float>(SCR_WIDTH * SCR_HEIGHT * 3, 0);
         dofFBO2= vector<float>(SCR_WIDTH * SCR_HEIGHT * 3, 0);
+        dofFBO3 = vector<float>(SCR_WIDTH * SCR_HEIGHT * 3, 0);
         dofDepth= vector<float>(SCR_WIDTH * SCR_HEIGHT);
         // per-frame time logic
         // --------------------
@@ -255,7 +280,7 @@ int main()
         // input
         // -----
         processInput(window);
-
+        //cout << 1 << endl;
         // render
         // ------
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -263,78 +288,55 @@ int main()
 
         //// 1. render scene into floating point framebuffer
         //// -----------------------------------------------
-        glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
-       
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, zNear, zFar);
+        glBindBuffer(GL_UNIFORM_BUFFER, uboMatrices);
+        glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(projection));
+        //glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
         glm::mat4 view = camera.GetViewMatrix();
-        glm::mat4 model = glm::mat4(1.0f);
-        shader.use();
-        shader.setMat4("projection", projection);
-        shader.setMat4("view", view);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, woodTexture);
-        // set lighting uniforms
-        for (unsigned int i = 0; i < lightPositions.size(); i++)
-        {
-            shader.setVec3("lights[" + std::to_string(i) + "].Position", lightPositions[i]);
-            shader.setVec3("lights[" + std::to_string(i) + "].Color", lightColors[i]);
-        }
-        shader.setVec3("viewPos", camera.Position);
-        // create one large cube that acts as the floor
-        model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, -1.0f, 0.0));
-        model = glm::scale(model, glm::vec3(12.5f, 0.5f, 12.5f));
-        shader.setMat4("model", model);
-        renderCube();
-        // then create multiple cubes as the scenery
-        glBindTexture(GL_TEXTURE_2D, containerTexture);
-        model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, 1.5f, 0.0));
-        model = glm::scale(model, glm::vec3(0.5f));
-        shader.setMat4("model", model);
-        renderCube();
+       
+        glm::mat4 vp = projection * view;
 
-        model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(2.0f, 0.0f, 1.0));
-        model = glm::scale(model, glm::vec3(0.5f));
-        shader.setMat4("model", model);
-        renderCube();
-
-        model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(-1.0f, -1.0f, 2.0));
-        model = glm::rotate(model, glm::radians(60.0f), glm::normalize(glm::vec3(1.0, 0.0, 1.0)));
-        shader.setMat4("model", model);
-        renderCube();
+        glBindFramebuffer(GL_FRAMEBUFFER, helper.depthFBO);
+        glBindTexture(GL_TEXTURE_2D, helper.depthMap);
+        glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, helper.geoData);
+        helper.depthShader.use();
+        glBindBuffer(GL_UNIFORM_BUFFER, uboMatrices);
+        glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(vp));
+        draw(helper.depthShader, shaderLight, woodTexture, containerTexture, lightPositions, lightColors);
 
       
+        //cout << helper.geoData[50]<< endl;
 
-        model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(-2.0f, 1.0f, -3.0));
-        model = glm::rotate(model, glm::radians(124.0f), glm::normalize(glm::vec3(1.0, 0.0, 1.0)));
-        shader.setMat4("model", model);
-        renderCube();
+        glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+        //int n = 10;
+        //float aperture = 0.01;
 
-        model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(-3.0f, 0.0f, 0.0));
-        model = glm::scale(model, glm::vec3(0.5f));
-        shader.setMat4("model", model);
-        renderCube();
+        //glm::vec3 object(0);
+        //glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, zNear, zFar);
+        //glm::vec3 right = glm::normalize(glm::cross(object - camera.Position, camera.Up));
+        //glm::vec3 p_up = glm::normalize(glm::cross(object - camera.Position, right));
+        //glm::mat4 mvp = projection * camera.GetViewMatrix();
+        //for (int i = 0; i < n; i++) {
+        //    glm::vec3 bokeh = right * cosf(i * 2 * M_PI / n) + p_up * sinf(i * 2 * M_PI / n);
+        //    glm::mat4 modelview = glm::lookAt(camera.Position + aperture * bokeh, object, p_up);
+        //    glm::mat4 mvp = projection * modelview;
 
-        // finally show all the light sources as bright cubes
-        shaderLight.use();
-        shaderLight.setMat4("projection", projection);
-        shaderLight.setMat4("view", view);
+        //    glBindBuffer(GL_UNIFORM_BUFFER, uboMatrices);
+        //    glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(mvp));
+        //    draw(shader, shaderLight, woodTexture, containerTexture, lightPositions, lightColors);
+        //    glAccum(i ? GL_ACCUM : GL_LOAD, 1.0 / n);
+        //}
 
-        for (unsigned int i = 0; i < lightPositions.size(); i++)
-        {
-            model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(lightPositions[i]));
-            model = glm::scale(model, glm::vec3(0.25f));
-            shaderLight.setMat4("model", model);
-            shaderLight.setVec3("lightColor", lightColors[i]);
-            renderCube();
-        }
+        //glAccum(GL_RETURN, 1);
+       /* glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, zNear, zFar);
+        glm::mat4 view = camera.GetViewMatrix();*/
+       
+        shader.use();
+        glBindBuffer(GL_UNIFORM_BUFFER, uboMatrices);
+        glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(vp));
+        
+        draw(shader, shaderLight, woodTexture, containerTexture, lightPositions, lightColors);
         glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_RGB, GL_FLOAT, dofFBO1.data());
       
         glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_DEPTH_COMPONENT, GL_FLOAT, dofDepth.data());
@@ -343,46 +345,70 @@ int main()
         float st = static_cast<float>(glfwGetTime());
         float _min = 10.0f;
         for (unsigned int i = 0; i < dofDepth.size(); i++) {
-           /* if (dofDepth[i] < _min)
-                _min = dofDepth[i];*/
-           /*  1 / dofDepth
-            dofDepth[i] = (zFar - dofDepth[i] * zDiff) / (zNear+zDiff);*/
-            //if (dofDepth[i] < 1)
-               // cout << dofDepth[i] << endl;
-            dofDepth[i] = zDiff / (dofDepth[i] - zNear);
+
+            dofDepth[i]  = normalizeDepth(dofDepth[i]);
+
+          
+
            
         }
         //cout << _min << endl;
         //uniformDist(0, vector<GLubyte>(), dofFBO2);
+        allR = vector<float>();
+
+
         for (unsigned int j = 0; j < SCR_HEIGHT; j++) {
             const unsigned int jMulWidth = j * SCR_WIDTH;
             for (unsigned int i = 0; i < SCR_WIDTH; i++) {
-                const float invPixelDepth = dofDepth[i + jMulWidth];
+                //if (abs(i - SCR_WIDTH / 2.0) >= 30 || abs(j - SCR_HEIGHT / 2.0) >= 30) continue;
+                const float invPixelDepth = 1/dofDepth[i + jMulWidth];
                 const float idx = (i + jMulWidth) * 3;
-                float c = abs(aperture * (screenPos * (invFocusLength - invPixelDepth) - 1));
-                /*if (abs(dofDepth[i + jMulWidth] - 1) > 0.001f)
-                    cout << 1/dofDepth[i + jMulWidth] << " " << c/2*SCR_HEIGHT << endl;*/
-                //c = 0.01f;
+                float c =abs(aperture * (screenPos * (invFocusLength - invPixelDepth) - 1));
+                //c = min(20.0f,exp(6*(c - 1)));
+                //c = min(20.0f,c);
+                //c = abs(dofDepth[i + jMulWidth] - focusLength);
+                //cout << c << endl;
+            /*    if (i%8==0 && j%8==0)
+                    if ((dofDepth[i + jMulWidth] - focus)>0.01f)
+                        cout << dofDepth[i + jMulWidth] << " " << c << " <= " << focus << endl;*/
+                ////c = 0.01f;
                 //cout << 1/ invPixelDepth << endl;
                      uniformDist(c/2, i,j,vector<float>{dofFBO1[idx]
                          , dofFBO1[idx + 1]
                          , dofFBO1[idx + 2]}
-                 , dofFBO2);
+                 , dofFBO2, dofFBO3);
             }
         
         }
+        cout << "done" << endl;
+        if (false) {
+            float minIt = 10000,maxIt = -1,avg = 0.0f;
+            for (unsigned int i = 0; i < dofFBO2.size(); i +=3) {
+                if (dofFBO2[i] > maxIt)  maxIt = dofFBO2[i];
+                if (dofFBO2[i] < minIt)  minIt = dofFBO2[i];
+                avg += dofFBO2[i];
+            }
+           avg = avg/dofFBO2.size();
+           for (unsigned int i = 0; i < dofFBO2.size(); i += 3) {
+           
+               dofFBO3[i] *= avg / dofFBO2[i];
+               dofFBO3[i+1] *= avg / dofFBO2[i];
+               dofFBO3[i+2] *= avg / dofFBO2[i];
+           }
+        }
 
-       /* for (unsigned int i = 0; i < dofFBO3.size(); i++) {
-            dofFBO3[i] = static_cast<GLubyte>(dofFBO2[i]);
-        }*/
         glBindTexture(GL_TEXTURE_2D, testText);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_FLOAT, dofFBO2.data());
-       /* glGenerateMipmap(GL_TEXTURE_2D);
+        if (pingpong == 0)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_FLOAT, dofFBO2.data());
+        else 
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_FLOAT, dofFBO3.data());
+        pingpong = 1;// 1 - pingpong;
+        glGenerateMipmap(GL_TEXTURE_2D);
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);*/
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         float et = static_cast<float>(glfwGetTime());
         //cout << et - st << endl;
         //glDrawPixels(SCR_WIDTH, SCR_HEIGHT, GL_RGB, GL_FLOAT, dofFBO2.data());
@@ -425,6 +451,9 @@ int main()
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
+    cout << "allR" << endl;
+    for (auto r : allR)
+        cout << r << endl;
 
     glfwTerminate();
     return 0;
@@ -603,7 +632,7 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     lastX = xpos;
     lastY = ypos;
 
-    camera.ProcessMouseMovement(xoffset, yoffset);
+    //camera.ProcessMouseMovement(xoffset, yoffset);
 }
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called
@@ -660,7 +689,7 @@ unsigned int loadTexture(char const* path, bool gammaCorrection)
 
     return textureID;
 }
-# define M_PI           3.14159265358979323846  /* pi */
+
 // Function to create Gaussian filter
 
 #define K  1
@@ -696,39 +725,164 @@ std::vector<float> filterCreation(const int size,const float sigma)
     return kernel;
 }
 
-void uniformDist(float r,int x,int y,vector<float> prevValue, vector<float>& fb2) {
 
-    r =r * SCR_WIDTH;
-    r = max(2.0f,floor(r));
+void uniformDist(float r,int x,int y,vector<float> prevValue, vector<float>& fb2, vector<float>& fb3) {
+
+    //r = r * SCR_WIDTH;
+    r = max(1.0f,r);
+    //r = min(20.0f, r);
+
+    //r = round(r);
+   //r = 1.0f;
     //r = max(8.0f,r);
     //cout << r << endl;
     const float r2 = r * r;
     float a = glm::pi<float>()*r2;
     //cout << r << endl;
     
-    float invA = 1/a;
-    vector<float> intensity{ prevValue[0]* invA  ,prevValue[1] * invA , prevValue[2] * invA };
+    float invA = 1 / a;
+    //float rr = ceil(r * 100.0) / 100.0;
+    const int maxPts = (int)(4 * r * r);
+    vector<int> nxv, nyv;
+    int pts = 0,area=0;
+   /* if (r!=1)
+    cout << r << endl;*/
+    fb2[(int)(x + y * SCR_WIDTH) * 3] = r/2;
+    fb2[(int)(x + y * SCR_WIDTH) * 3 + 1] = r / 2;
+    fb2[(int)(x + y * SCR_WIDTH) * 3 + 2] = r / 2;
+    //return;
+    /*if (r!=1)
+    cout << r << endl;*/
+    glm::vec3 intensity(prevValue[0]  ,prevValue[1], prevValue[2]);
     //cout << intensity[0] << " " << intensity[1] << " " << intensity[2] << endl;
-    for (int row = max(0.0f,-r + y); row < min((float)SCR_WIDTH-1,r + y); row++) {
+    for (int row = max(0.0f,-r + y); row <= min((float)SCR_WIDTH-1,r + y); row++) {
         const unsigned int row2 = row * row;
         const unsigned int rowMulWidth = row * SCR_WIDTH;
         int rawRow2 = pow(row-y,2);
-        for (int col = max(0.0f, -r + x); col < min((float)SCR_HEIGHT-1, r + x); col++) {
+        for (int col = max(0.0f, -r + x); col <= min((float)SCR_HEIGHT-1, r + x); col++) {
             int rawCol = col -x;
             float idx = (int)(col + rowMulWidth) * 3;
             
             if (rawCol * rawCol + rawRow2 <= r2) {
                 //cout << col << " " << row << endl;
                 //cout << rawCol << " : " << col << " " << (row - SCR_CENTER.y) << " : " << row << endl;
-                fb2[idx]  += intensity[0];
-                fb2[idx +1] += intensity[1];
-                fb2[idx +2] += intensity[2];
+                //fb2[idx] += 0.1f;// intensity[0];
+                //fb2[idx +1] += 0.1f;// intensity[1];
+                //fb2[idx +2] += 0.1f;// intensity[2];
+                pts++;
+                area++;
+                nxv.push_back( col);
+                nyv.push_back( row);
+               
                 //if (isnan(static_cast<double>(fb2[idx])))
                 //cout << intensity[0] << " " << intensity[1] << " " << intensity[2] << endl;
             }
         }
     }
+    intensity /= area;
+    //cout << "a" << pts << " " << nxv.size() << endl;
+    for (unsigned int i = 0; i < pts; i++) {
+        fb3[(nxv[i] + nyv[i] * SCR_WIDTH)*3] += intensity.r;
+        fb3[(nxv[i] + nyv[i] * SCR_WIDTH) * 3 + 1] += intensity.g;
+        fb3[(nxv[i] + nyv[i] * SCR_WIDTH) * 3 + 2] += intensity.b;
 
+    }
+    //cout << " b " << endl;
 
 
 }
+
+
+void draw(Shader shader,Shader shaderLight,unsigned int woodTexture,unsigned int containerTexture
+    ,vector<glm::vec3> lightPositions,vector<glm::vec3> lightColors) {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, zNear, zFar);
+    //projection = glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f, zNear, zFar);
+    glm::mat4 view = camera.GetViewMatrix();
+    glm::mat4 model = glm::mat4(1.0f);
+   
+    shader.use();
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, woodTexture);
+    // set lighting uniforms
+    for (unsigned int i = 0; i < lightPositions.size(); i++)
+    {
+        shader.setVec3("lights[" + std::to_string(i) + "].Position", lightPositions[i]);
+        shader.setVec3("lights[" + std::to_string(i) + "].Color", lightColors[i]);
+    }
+    shader.setVec3("viewPos", camera.Position);
+    // create one large cube that acts as the floor
+    model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(0.0f, -1.0f, 0.0));
+    model = glm::scale(model, glm::vec3(12.5f, 0.5f, 12.5f));
+    shader.setMat4("model", model);
+    renderCube();
+    // then create multiple cubes as the scenery
+    glBindTexture(GL_TEXTURE_2D, containerTexture);
+    model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(0.0f, 1.5f, 0.0));
+    model = glm::scale(model, glm::vec3(0.5f));
+    shader.setMat4("model", model);
+    renderCube();
+
+    model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(2.0f, 0.0f, 0.0));
+    model = glm::scale(model, glm::vec3(0.5f));
+    shader.setMat4("model", model);
+    renderCube();
+
+    model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(-1.0f, -1.0f, 0.0));
+    model = glm::rotate(model, glm::radians(60.0f), glm::normalize(glm::vec3(1.0, 0.0, 1.0)));
+    shader.setMat4("model", model);
+    renderCube();
+
+    model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(0.0f, 0.0f, 4.0));
+    model = glm::scale(model, glm::vec3(5.0f, 5.0f, 0.1f));
+    shader.setMat4("model", model);
+    //renderCube();
+
+
+    model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(-2.0f, 1.0f, -3.0));
+    model = glm::rotate(model, glm::radians(124.0f), glm::normalize(glm::vec3(1.0, 0.0, 1.0)));
+    shader.setMat4("model", model);
+    //renderCube();
+
+    model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(-3.0f, 0.0f, 0.0));
+    model = glm::scale(model, glm::vec3(0.5f));
+    shader.setMat4("model", model);
+    renderCube();
+
+    // finally show all the light sources as bright cubes
+    shaderLight.use();
+
+    for (unsigned int i = 0; i < lightPositions.size(); i++)
+    {
+        model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(lightPositions[i]));
+        model = glm::scale(model, glm::vec3(0.25f));
+        shaderLight.setMat4("model", model);
+        shaderLight.setVec3("lightColor", lightColors[i]);
+        //renderCube();
+    }
+}
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+        cout << lastX << " " << lastY << endl;
+        focus = normalizeDepth(helper.geoData[(int)(lastX + (SCR_HEIGHT - lastY) * SCR_WIDTH)]);
+        screenPos = ((1. / aperture) + 1) / (invFocusLength- 1/focus);
+        //glm::vec3 data = helper.calWordPos(glm::vec2(lastX, lastY));
+     
+        cout << focus << endl;
+    }
+}
+
+
+float normalizeDepth(float depth) {
+    return  (zNear * zFar) / (zFar - depth * (zFar - zNear)) ;
+}
+

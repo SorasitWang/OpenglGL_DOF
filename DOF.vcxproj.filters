@@ -16,6 +16,9 @@
     <Filter Include="Header Files\Light">
       <UniqueIdentifier>{60204b1b-c2f7-43d6-bd96-1831d3a49ffd}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\helper">
+      <UniqueIdentifier>{4dc0a15f-1007-4efd-97be-18581fb741f8}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Source.cpp">
@@ -32,6 +35,9 @@
     </ClCompile>
     <ClCompile Include="src\tmp.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="header\helper\helper.cpp">
+      <Filter>Header Files\helper</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -52,6 +58,9 @@
     </ClInclude>
     <ClInclude Include="header\light\light.h">
       <Filter>Header Files\Light</Filter>
+    </ClInclude>
+    <ClInclude Include="header\helper\helper.h">
+      <Filter>Header Files\helper</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -101,6 +110,24 @@
       <Filter>Source Files</Filter>
     </None>
     <None Include="src\7.light_box.fs">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="header\helper\screenShader.fs">
+      <Filter>Header Files\helper</Filter>
+    </None>
+    <None Include="header\helper\screenShader.vs">
+      <Filter>Header Files\helper</Filter>
+    </None>
+    <None Include="header\helper\depthShader.fs">
+      <Filter>Header Files\helper</Filter>
+    </None>
+    <None Include="header\helper\depthShader.vs">
+      <Filter>Header Files\helper</Filter>
+    </None>
+    <None Include="src\accu.fs">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="src\accu.vs">
       <Filter>Source Files</Filter>
     </None>
   </ItemGroup>
